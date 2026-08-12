@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    // Modern JavaScript features emitted for Node.js.
+    "target": "ES2022",
+
+    // Required for native ES-module imports in Node.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    // Enables stricter checks before code runs.
+    "strict": true,
+
+    // Lets us import CommonJS packages such as Express cleanly.
+    "esModuleInterop": true,
+
+    // Does not emit JavaScript files; tsx runs TypeScript directly.
+    "noEmit": true,
+
+    // Avoids type-checking declaration files inside installed dependencies.
+    // Our application code remains fully type-checked.
+    "skipLibCheck": true,
+
+    // Helps prevent casing issues between macOS and Linux deployments.
+    "forceConsistentCasingInFileNames": true
+  },
+  // Includes both runtime API code and the Drizzle migration configuration.
+  "include": ["src", "drizzle.config.ts"]
+}
