@@ -1,5 +1,7 @@
 import { eq } from "drizzle-orm";
 import { classifyTicket } from "./classifier.js";
+import { scoreConfidence } from "./confidenceScorer.js";
+import { draftResponse } from "./responder.js";
 import { db } from "../db/client.js";
 import { agentDecisions, tickets } from "../db/schema.js";
 
@@ -20,12 +22,15 @@ export async function processTicket(ticketId: string) {
   // Produce category and urgency without changing the original customer message.
   const classification = classifyTicket(ticket.rawText);
 
-  // Placeholder until Step 7 adds a response generator.
-  const draftResponse =
-    "Thanks for contacting support. A team member will review your request shortly.";
+  // Builds a category- and urgency-aware reply draft.
+  const responseDraft = draftResponse(ticket.rawText, classification);
 
-  // Placeholder until Step 8 adds calibrated confidence scoring.
-  const confidence = "0.500";
+  // Scores the decision using agreement, similarity, and critique signals.
+  const scoring = await scoreConfidence({
+    ticketText: ticket.rawText,
+    draftResponse: responseDraft,
+    classification
+  });
 
   // Every processing attempt creates a new immutable audit record.
   const [decision] = await db
@@ -34,8 +39,9 @@ export async function processTicket(ticketId: string) {
       ticketId: ticket.id,
       category: classification.category,
       urgency: classification.urgency,
-      draftResponse,
-      confidence,
+      draftResponse: responseDraft,
+      // PostgreSQL numeric values are represented as strings by Drizzle.
+      confidence: String(scoring.confidence),
       actionTaken: "escalated",
       modelVersion: MODEL_VERSION
     })

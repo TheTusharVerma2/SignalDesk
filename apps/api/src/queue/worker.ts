@@ -16,7 +16,8 @@ const worker = new Worker(
     const decision = await processTicket(job.data.ticketId);
 
     console.log(
-      `Processed ${job.data.ticketId}: ${decision.category}, ${decision.urgency}`
+      `Processed ${job.data.ticketId}: ${decision.category}, ` +
+        `${decision.urgency}, confidence ${decision.confidence}`
     );
   },
   { connection }
