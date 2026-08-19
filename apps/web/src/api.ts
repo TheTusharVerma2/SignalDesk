@@ -1,6 +1,3 @@
-// Uses a deployed API URL when configured, otherwise the local API.
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
-
 export type Ticket = {
   id: string;
   source: string;
@@ -21,24 +18,46 @@ export type Decision = {
   createdAt: string;
 };
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    ...options
-  });
+export type CalibrationSnapshot = {
+  id: string;
+  confidenceBucket: string;
+  predictedAccuracy: string;
+  actualAccuracy: string;
+  sampleSize: number;
+  computedAt: string;
+};
 
-  if (!response.ok) throw new Error(await response.text());
-  return response.json() as Promise<T>;
-}
+export type CategoryDriftItem = {
+  category: string;
+  aiCount: number;
+  humanCount: number;
+};
+
+export type EvaluationMetrics = {
+  snapshots: CalibrationSnapshot[];
+  totalReviewed: number;
+  overallAccuracy: number;
+  categoryDrift: CategoryDriftItem[];
+};
+
+const API_BASE = "http://localhost:3001";
 
 export const api = {
-  listTickets: (status?: string) =>
-    request<{ tickets: Ticket[] }>(
-      `/tickets${status ? `?status=${encodeURIComponent(status)}` : ""}`
-    ),
-  getTicket: (ticketId: string) =>
-    request<{ ticket: Ticket; decisions: Decision[] }>(`/tickets/${ticketId}`),
-  submitCorrection: (
+  async listTickets(status?: string): Promise<{ tickets: Ticket[] }> {
+    const url = new URL("/tickets", API_BASE);
+    if (status) url.searchParams.set("status", status);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Failed to fetch tickets");
+    return res.json();
+  },
+
+  async getTicket(id: string): Promise<{ ticket: Ticket; decisions: Decision[] }> {
+    const res = await fetch(`${API_BASE}/tickets/${id}`);
+    if (!res.ok) throw new Error("Failed to fetch ticket");
+    return res.json();
+  },
+
+  async submitCorrection(
     ticketId: string,
     payload: {
       decisionId: string;
@@ -48,9 +67,25 @@ export const api = {
       correctedResponse?: string;
       correctedBy: string;
     }
-  ) =>
-    request(`/tickets/${ticketId}/correct`, {
+  ) {
+    const res = await fetch(`${API_BASE}/tickets/${ticketId}/correct`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
-    })
+    });
+    if (!res.ok) throw new Error("Failed to save correction");
+    return res.json();
+  },
+
+  async getEvalMetrics(): Promise<EvaluationMetrics> {
+    const res = await fetch(`${API_BASE}/eval/metrics`);
+    if (!res.ok) throw new Error("Failed to fetch evaluation metrics");
+    return res.json();
+  },
+
+  async triggerCalibration(): Promise<{ snapshots: CalibrationSnapshot[]; ece: number; totalReviewed: number; overallAccuracy: number }> {
+    const res = await fetch(`${API_BASE}/eval/calibrate`, { method: "POST" });
+    if (!res.ok) throw new Error("Failed to run calibration");
+    return res.json();
+  }
 };

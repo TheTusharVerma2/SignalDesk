@@ -3,6 +3,7 @@ import "dotenv/config";
 
 import cors from "cors";
 import express from "express";
+import evalRoutes from "./routes/eval.js";
 import ticketRoutes from "./routes/tickets.js";
 import webhookRoutes from "./routes/webhooks.js";
 
@@ -15,7 +16,6 @@ app.use(cors());
 app.use(express.json());
 
 // A lightweight endpoint for checking that the server is running.
-// It does not access the database or perform any side effects.
 app.get("/health", (_request, response) => {
   response.json({
     ok: true,
@@ -28,6 +28,9 @@ app.use("/webhooks", webhookRoutes);
 
 // Mounts ticket-reading routes: GET /tickets and GET /tickets/:id.
 app.use("/tickets", ticketRoutes);
+
+// Mounts evaluation and calibration routes: POST /eval/calibrate and GET /eval/metrics.
+app.use("/eval", evalRoutes);
 
 // Returns JSON errors for invalid requests instead of Express's HTML error page.
 app.use(

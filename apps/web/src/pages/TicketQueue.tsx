@@ -17,7 +17,7 @@ export function TicketQueue() {
   return (
     <main className="page">
       <div className="page-heading">
-        <div><p className="eyebrow">Support operations</p><h1>Ticket Queue</h1></div>
+        <div><h1>Ticket Queue</h1></div>
         <label className="filter">Status
           <select value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value="">All tickets</option><option value="pending">Pending</option>

@@ -1,15 +1,14 @@
 import { eq } from "drizzle-orm";
-import { classifyTicket } from "./classifier.js";
+import { classifyTicketWithConsensus } from "./classifier.js";
 import { scoreConfidence } from "./confidenceScorer.js";
 import { draftResponse } from "./responder.js";
 import { db } from "../db/client.js";
 import { agentDecisions, tickets } from "../db/schema.js";
 
-// This version label identifies exactly which classifier created the decision.
-const MODEL_VERSION = "rule-based-v1";
+const MODEL_VERSION = "consensus-llm-v1";
+const AUTO_SEND_THRESHOLD = 0.75;
 
 export async function processTicket(ticketId: string) {
-  // Retrieve the original ticket using the ID stored in the Redis job.
   const [ticket] = await db
     .select()
     .from(tickets)
@@ -19,20 +18,26 @@ export async function processTicket(ticketId: string) {
     throw new Error(`Ticket ${ticketId} was not found`);
   }
 
-  // Produce category and urgency without changing the original customer message.
-  const classification = classifyTicket(ticket.rawText);
+  // Run multi-sample consensus classifier
+  const { classification, agreementScore } = await classifyTicketWithConsensus(
+    ticket.rawText
+  );
 
-  // Builds a category- and urgency-aware reply draft.
+  // Draft response aware of category and urgency
   const responseDraft = draftResponse(ticket.rawText, classification);
 
-  // Scores the decision using agreement, similarity, and critique signals.
+  // Score confidence using consensus agreement signal
   const scoring = await scoreConfidence({
     ticketText: ticket.rawText,
     draftResponse: responseDraft,
-    classification
+    classification,
+    agreementScore
   });
 
-  // Every processing attempt creates a new immutable audit record.
+  const isHighConfidence = scoring.confidence >= AUTO_SEND_THRESHOLD;
+  const actionTaken = isHighConfidence ? "auto_sent" : "escalated";
+  const ticketStatus = isHighConfidence ? "auto_sent" : "escalated";
+
   const [decision] = await db
     .insert(agentDecisions)
     .values({
@@ -40,17 +45,15 @@ export async function processTicket(ticketId: string) {
       category: classification.category,
       urgency: classification.urgency,
       draftResponse: responseDraft,
-      // PostgreSQL numeric values are represented as strings by Drizzle.
       confidence: String(scoring.confidence),
-      actionTaken: "escalated",
+      actionTaken,
       modelVersion: MODEL_VERSION
     })
     .returning();
 
-  // Update the ticket's current state while retaining the decision history above.
   await db
     .update(tickets)
-    .set({ status: "escalated" })
+    .set({ status: ticketStatus })
     .where(eq(tickets.id, ticket.id));
 
   return decision;
